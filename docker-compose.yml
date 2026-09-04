@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  target-mcp-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.target
+    ports:
+      - "8000:8000"
+    networks:
+      - ephemeral-qa-sandbox
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  playwright-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    depends_on:
+      target-mcp-api:
+        condition: service_healthy
+    environment:
+      - BASE_URL=http://target-mcp-api:8000
+    networks:
+      - ephemeral-qa-sandbox
+
+networks:
+  ephemeral-qa-sandbox:
+    driver: bridge
