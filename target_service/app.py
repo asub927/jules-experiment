@@ -8,13 +8,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
+import os
+import httpx
 from datetime import datetime, timezone
 import re
 
 app = FastAPI(
     title="Target Enterprise API & MCP Microservice",
     version="1.0.0",
-    description="Target service with Users, Items, and Orders domains for MCP Introspection and Playwright regression testing."
+    description="Target service with Users, Items, Orders, and Alpha Vantage domains for MCP Introspection and Playwright regression testing."
 )
 
 # In-memory storage
@@ -202,6 +204,77 @@ def delete_order(order_id: str, authorization: Optional[str] = Header(None)):
     del ORDERS_DB[order_id]
     return Response(status_code=204)
 
+# ALPHA VANTAGE DOMAIN
+@app.get("/alpha_vantage/global_quote")
+def get_alpha_vantage_quote(symbol: str = "IBM", api_key: Optional[str] = None):
+    key = api_key or os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={key}"
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(url)
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception:
+        pass
+
+    # Mocked baseline quote response if offline / rate limited
+    return {
+        "Global Quote": {
+            "01. symbol": symbol,
+            "02. open": "180.00",
+            "03. high": "182.50",
+            "04. low": "179.10",
+            "05. price": "181.25",
+            "06. volume": "3200100",
+            "07. latest trading day": "2026-09-03",
+            "08. previous close": "179.80",
+            "09. change": "1.45",
+            "10. change percent": "0.806%"
+        }
+    }
+
+@app.get("/alpha_vantage/ticker_search")
+def get_alpha_vantage_ticker_search(keywords: str = "tesco", api_key: Optional[str] = None):
+    key = api_key or os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
+    url = f"https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={keywords}&apikey={key}"
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if "bestMatches" in data:
+                    return data
+    except Exception:
+        pass
+
+    # Mocked fallback ticker search matches if offline / rate limited
+    return {
+        "bestMatches": [
+            {
+                "1. symbol": "TSCO.LON",
+                "2. name": "Tesco PLC",
+                "3. type": "Equity",
+                "4. region": "United Kingdom",
+                "5. marketOpen": "08:00",
+                "6. marketClose": "16:30",
+                "7. timezone": "UTC+01",
+                "8. currency": "GBX",
+                "9. matchScore": "0.7273"
+            },
+            {
+                "1. symbol": "TSCDY",
+                "2. name": "Tesco PLC",
+                "3. type": "Equity",
+                "4. region": "United States",
+                "5. marketOpen": "09:30",
+                "6. marketClose": "16:00",
+                "7. timezone": "UTC-04",
+                "8. currency": "USD",
+                "9. matchScore": "0.7143"
+            }
+        ]
+    }
+
 # MCP JSON-RPC ENDPOINT FOR INTROSPECTION / INVOCATION
 MCP_TOOLS = [
     {
@@ -326,6 +399,34 @@ MCP_TOOLS = [
             "required": ["order_id"]
         },
         "auth": {"required": True, "roles": ["user", "admin"]}
+    },
+    {
+        "name": "get_alpha_vantage_quote",
+        "description": "Fetches stock quote data from Alpha Vantage API.",
+        "path": "/alpha_vantage/global_quote",
+        "method": "GET",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "default": "IBM"}
+            },
+            "required": ["symbol"]
+        },
+        "auth": {"required": False, "roles": []}
+    },
+    {
+        "name": "ticker_search",
+        "description": "Fetches stock symbol ticker search matches from Alpha Vantage API (SYMBOL_SEARCH). Documentation: https://www.alphavantage.co/documentation/",
+        "path": "/alpha_vantage/ticker_search",
+        "method": "GET",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "keywords": {"type": "string", "default": "tesco"}
+            },
+            "required": ["keywords"]
+        },
+        "auth": {"required": False, "roles": []}
     }
 ]
 

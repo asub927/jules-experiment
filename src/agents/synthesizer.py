@@ -27,17 +27,23 @@ class PlaywrightSynthesizerAgent:
         """Generates TypeScript Playwright test files and returns a dictionary of file path -> content."""
         fixtures = fixture_overrides or {}
 
-        # Default synthetic fixture data (intentionally non-conforming default SKU to trigger self-healing if uncorrected)
+        # Default synthetic fixture data
         user_name = fixtures.get("user_name", "Automation Test User")
         user_email = fixtures.get("user_email", "auto_user@example.com")
         item_name = fixtures.get("item_name", "Enterprise Server License")
         item_sku = fixtures.get("item_sku", "SKU9999")  # Missing dash - will fail regex ^[A-Z]{3}-\d{4}$
         item_price = fixtures.get("item_price", 299.99)
         item_category = fixtures.get("item_category", "Software")
+        ticker_keywords = fixtures.get("ticker_keywords", "tesco")
 
         spec_content = f"""import {{ test, expect }} from '@playwright/test';
 import {{ z }} from 'zod';
 
+/**
+ * Alpha Vantage API Documentation Reference:
+ * https://www.alphavantage.co/documentation/
+ */
+const ALPHA_VANTAGE_DOCS_URL = 'https://www.alphavantage.co/documentation/';
 const BASE_URL = process.env.BASE_URL || '{self.base_url}';
 const USER_TOKEN = 'user_token';
 const ADMIN_TOKEN = 'admin_token';
@@ -69,6 +75,22 @@ export const OrderSchema = z.object({{
   created_at: z.string()
 }}).strict();
 
+export const TickerMatchSchema = z.object({{
+  '1. symbol': z.string(),
+  '2. name': z.string(),
+  '3. type': z.string(),
+  '4. region': z.string(),
+  '5. marketOpen': z.string().optional(),
+  '6. marketClose': z.string().optional(),
+  '7. timezone': z.string().optional(),
+  '8. currency': z.string().optional(),
+  '9. matchScore': z.string().optional()
+}});
+
+export const TickerSearchResponseSchema = z.object({{
+  bestMatches: z.array(TickerMatchSchema)
+}}).strict();
+
 export const ErrorResponseSchema = z.object({{
   detail: z.union([z.string(), z.array(z.any())])
 }});
@@ -77,6 +99,18 @@ test.describe('API Automation Factory - Four Pillar Playwright Regression Suite'
   let createdUserId: string;
   let createdItemId: string;
   let createdOrderId: string;
+
+  // Alpha Vantage Ticker Search Regression Test
+  test('Alpha Vantage: Ticker Search (SYMBOL_SEARCH) with Zod validation', async ({{ request }}) => {{
+    const response = await request.get(`${{BASE_URL}}/alpha_vantage/ticker_search?keywords={ticker_keywords}`);
+    expect(response.status()).toBe(200);
+
+    const json = await response.json();
+    const validated = TickerSearchResponseSchema.parse(json);
+    expect(validated.bestMatches.length).toBeGreaterThan(0);
+    expect(validated.bestMatches[0]['1. symbol']).toBeTruthy();
+    expect(ALPHA_VANTAGE_DOCS_URL).toBe('https://www.alphavantage.co/documentation/');
+  }});
 
   // PILLAR 1 & 4: CRUD Execution & Strict Zod Validation (Tier 0 & Tier 1)
   test('Tier 0: Create User with strict Zod assertion', async ({{ request }}) => {{
@@ -121,7 +155,6 @@ test.describe('API Automation Factory - Four Pillar Playwright Regression Suite'
   }});
 
   test('Tier 1: Create Order using state handoff IDs', async ({{ request }}) => {{
-    // Pre-requisite fallback if isolated test runner
     if (!createdUserId) createdUserId = 'usr_synthetic';
     if (!createdItemId) createdItemId = 'item_synthetic';
 

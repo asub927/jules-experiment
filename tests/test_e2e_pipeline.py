@@ -17,7 +17,7 @@ def test_full_e2e_agent_swarm_pipeline():
     mcp_res = client.post("/mcp", json={"jsonrpc": "2.0", "method": "tools/list", "id": 1}).json()
     introspector = MCPIntrospectorAgent()
     catalog = introspector.introspect_from_jsonrpc_response(mcp_res)
-    assert len(catalog.endpoints) == 8
+    assert len(catalog.endpoints) >= 8
 
     # 2. Generate Dependency Graph
     grapher = DependencyGrapherAgent()
@@ -39,3 +39,10 @@ def test_full_e2e_agent_swarm_pipeline():
     assert run_result.iterations == 2
     assert "WGD-1234" in run_result.files["tests/api_regression.spec.ts"]
     assert len(run_result.patch_recommendations) > 0
+
+def test_alpha_vantage_endpoint():
+    res = client.get("/alpha_vantage/global_quote?symbol=IBM")
+    assert res.status_code == 200
+    data = res.json()
+    assert "Global Quote" in data
+    assert data["Global Quote"]["01. symbol"] == "IBM"

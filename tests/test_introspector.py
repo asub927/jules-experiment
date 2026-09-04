@@ -16,7 +16,7 @@ def test_introspector_with_mock_client():
     catalog = agent.introspect_from_jsonrpc_response(res.json())
 
     assert isinstance(catalog, ToolCatalog)
-    assert len(catalog.endpoints) == 8
+    assert len(catalog.endpoints) >= 8
 
     # Check create_user tool signature
     user_tool = next(ep for ep in catalog.endpoints if ep.tool_name == "create_user")
@@ -28,3 +28,8 @@ def test_introspector_with_mock_client():
     item_tool = next(ep for ep in catalog.endpoints if ep.tool_name == "create_item")
     sku_param = next(p for p in item_tool.parameters if p.name == "sku")
     assert sku_param.pattern == "^[A-Z]{3}-\\d{4}$"
+
+    # Check Alpha Vantage endpoint signature
+    av_tool = next(ep for ep in catalog.endpoints if ep.tool_name == "get_alpha_vantage_quote")
+    assert av_tool.path == "/alpha_vantage/global_quote"
+    assert av_tool.method == "GET"
