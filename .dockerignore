@@ -1,0 +1,12 @@
+.git
+.next
+dashboard/.next
+dashboard/node_internals
+node_modules
+dashboard/node_modules
+*.log
+verification
+playwright-report
+test-results
+__pycache__
+*.pyc
